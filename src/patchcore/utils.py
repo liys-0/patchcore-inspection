@@ -6,6 +6,7 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL
+from PIL import Image
 import torch
 import tqdm
 
@@ -47,14 +48,14 @@ def plot_segmentation_images(
         desc="Generating Segmentation Images...",
         leave=False,
     ):
-        image = PIL.Image.open(image_path).convert("RGB")
+        image = Image.open(image_path).convert("RGB")
         image = image_transform(image)
         if not isinstance(image, np.ndarray):
             image = image.numpy()
 
         if masks_provided:
             if mask_path is not None:
-                mask = PIL.Image.open(mask_path).convert("RGB")
+                mask = Image.open(mask_path).convert("RGB")
                 mask = mask_transform(mask)
                 if not isinstance(mask, np.ndarray):
                     mask = mask.numpy()
@@ -63,11 +64,26 @@ def plot_segmentation_images(
 
         savename = image_path.split("/")
         savename = "_".join(savename[-save_depth:])
-        savename = os.path.join(savefolder, savename)
+
+        if isinstance(anomaly_score, (float, int, np.floating, np.integer)):
+            savename = os.path.join(savefolder, f"{anomaly_score:.3f}_{savename}")
+        else:
+            savename = os.path.join(savefolder, savename)
+
         f, axes = plt.subplots(1, 2 + int(masks_provided))
+
+        if isinstance(anomaly_score, (float, int, np.floating, np.integer)):
+            f.suptitle(f"Anomaly Score: {anomaly_score:.3f}")
+
         axes[0].imshow(image.transpose(1, 2, 0))
-        axes[1].imshow(mask.transpose(1, 2, 0))
-        axes[2].imshow(segmentation)
+        if masks_provided:
+            axes[1].imshow(mask.transpose(1, 2, 0))
+            im = axes[2].imshow(segmentation)
+            f.colorbar(im, ax=axes[2])
+        else:
+            im = axes[1].imshow(segmentation)
+            f.colorbar(im, ax=axes[1])
+
         f.set_size_inches(3 * (2 + int(masks_provided)), 3)
         f.tight_layout()
         f.savefig(savename)
