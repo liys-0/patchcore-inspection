@@ -12,41 +12,45 @@ _For questions & feedback, please reach out to karsten.rh1@gmail.com!_
 
 ---
 
-## Quick Guide
+## 🚀 How to Run PatchCore (Quick Guide)
 
-First, clone this repository and set the `PYTHONPATH` environment variable with `env PYTHONPATH=src python bin/run_patchcore.py`.
-To train PatchCore on MVTec AD (as described below), run
+### 1. Setup Environment
+Ensure your `PYTHONPATH` is set to the `src` directory so the Python scripts can find the `patchcore` module. If you are using the virtual environment, activate it first (`source .venv/bin/activate`).
 
-```
-datapath=/path_to_mvtec_folder/mvtec datasets=('bottle' 'cable' 'capsule' 'carpet' 'grid' 'hazelnut'
-'leather' 'metal_nut' 'pill' 'screw' 'tile' 'toothbrush' 'transistor' 'wood' 'zipper')
+### 2. Train PatchCore
+To train PatchCore on the MVTec AD dataset (using a WideResNet50 backbone), run the following command:
+
+```bash
+# Define your dataset path
+datapath=/path_to_mvtec_folder/mvtec
+
+# Define the dataset categories you want to train on
+datasets=('bottle' 'cable' 'capsule' 'carpet' 'grid' 'hazelnut' 'leather' 'metal_nut' 'pill' 'screw' 'tile' 'toothbrush' 'transistor' 'wood' 'zipper')
 dataset_flags=($(for dataset in "${datasets[@]}"; do echo '-d '$dataset; done))
 
-
-python bin/run_patchcore.py --gpu 0 --seed 0 --save_patchcore_model \
+# Run the training script
+env PYTHONPATH=src python bin/run_patchcore.py --gpu 0 --seed 0 --save_patchcore_model \
 --log_group IM224_WR50_L2-3_P01_D1024-1024_PS-3_AN-1_S0 --log_online --log_project MVTecAD_Results results \
 patch_core -b wideresnet50 -le layer2 -le layer3 --faiss_on_gpu \
---pretrain_embed_dimension 1024  --target_embed_dimension 1024 --anomaly_scorer_num_nn 1 --patchsize 3 \
-sampler -p 0.1 approx_greedy_coreset dataset --resize 256 --imagesize 224 "${dataset_flags[@]}" mvtec $datapath
+--pretrain_embed_dimension 1024 --target_embed_dimension 1024 --anomaly_scorer_num_nn 1 --patchsize 3 \
+sampler -p 0.1 approx_greedy_coreset \
+dataset --resize 256 --imagesize 224 "${dataset_flags[@]}" mvtec $datapath
 ```
 
-which runs PatchCore on MVTec images of sizes 224x224 using a WideResNet50-backbone pretrained on
-ImageNet. For other sample runs with different backbones, larger images or ensembles, see
-`sample_training.sh`.
+### 3. Evaluate a Pretrained Model
+If you already have a trained PatchCore model, you can evaluate it using `bin/load_and_evaluate_patchcore.py`:
 
-Given a pretrained PatchCore model (or models for all MVTec AD subdatasets), these can be evaluated using
-
-```shell
+```bash
 datapath=/path_to_mvtec_folder/mvtec
 loadpath=/path_to_pretrained_patchcores_models
 modelfolder=IM224_WR50_L2-3_P001_D1024-1024_PS-3_AN-1_S0
 savefolder=evaluated_results'/'$modelfolder
 
-datasets=('bottle'  'cable'  'capsule'  'carpet'  'grid'  'hazelnut' 'leather'  'metal_nut'  'pill' 'screw' 'tile' 'toothbrush' 'transistor' 'wood' 'zipper')
+datasets=('bottle' 'cable' 'capsule' 'carpet' 'grid' 'hazelnut' 'leather' 'metal_nut' 'pill' 'screw' 'tile' 'toothbrush' 'transistor' 'wood' 'zipper')
 dataset_flags=($(for dataset in "${datasets[@]}"; do echo '-d '$dataset; done))
 model_flags=($(for dataset in "${datasets[@]}"; do echo '-p '$loadpath'/'$modelfolder'/models/mvtec_'$dataset; done))
 
-python bin/load_and_evaluate_patchcore.py --gpu 0 --seed 0 $savefolder \
+env PYTHONPATH=src python bin/load_and_evaluate_patchcore.py --gpu 0 --seed 0 $savefolder \
 patch_core_loader "${model_flags[@]}" --faiss_on_gpu \
 dataset --resize 366 --imagesize 320 "${dataset_flags[@]}" mvtec $datapath
 ```
