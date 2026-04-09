@@ -1,4 +1,5 @@
 """PatchCore and PatchCore detection methods."""
+
 import logging
 import os
 import pickle
@@ -315,8 +316,12 @@ class PatchMaker:
         if isinstance(x, np.ndarray):
             was_numpy = True
             x = torch.from_numpy(x)
-        while x.ndim > 1:
-            x = torch.max(x, dim=-1).values
+
+        x = x.reshape(x.shape[0], -1)
+        total_pixels = x.shape[1]
+        top_k = int(max(1, 0.05 * total_pixels))
+        x = torch.topk(x, top_k, dim=1).values.mean(dim=1)
+
         if was_numpy:
             return x.numpy()
         return x

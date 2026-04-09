@@ -135,6 +135,79 @@ def run(
                 x[1] != "good" for x in dataloaders["testing"].dataset.data_to_iterate
             ]
 
+            # Save anomaly scores and paths to CSV
+            import csv
+
+            csv_path = os.path.join(run_save_path, f"{dataset_name}_anomaly_scores.csv")
+            image_paths = [x[2] for x in dataloaders["testing"].dataset.data_to_iterate]
+            mask_paths = [x[3] for x in dataloaders["testing"].dataset.data_to_iterate]
+
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["image_path", "anomaly_label", "anomaly_score"])
+                for img_path, label, score in zip(image_paths, anomaly_labels, scores):
+                    writer.writerow([img_path, label, score])
+            LOGGER.info(f"Saved anomaly scores to {csv_path}")
+
+            # Find best/worst normal and anomalous images
+            normal_indices = [i for i, label in enumerate(anomaly_labels) if not label]
+            anomalous_indices = [i for i, label in enumerate(anomaly_labels) if label]
+
+            # Sort indices by score
+            normal_indices.sort(key=lambda i: scores[i])
+            anomalous_indices.sort(key=lambda i: scores[i])
+
+            best_normal = normal_indices[:5]
+            worst_normal = normal_indices[-5:]
+            best_anomalous = anomalous_indices[
+                -5:
+            ]  # Highest score is best for anomalous
+            worst_anomalous = anomalous_indices[
+                :5
+            ]  # Lowest score is worst for anomalous
+
+            def image_transform(image):
+                in_std = np.array(dataloaders["testing"].dataset.transform_std).reshape(
+                    -1, 1, 1
+                )
+                in_mean = np.array(
+                    dataloaders["testing"].dataset.transform_mean
+                ).reshape(-1, 1, 1)
+                image = dataloaders["testing"].dataset.transform_img(image)
+                return np.clip((image.numpy() * in_std + in_mean) * 255, 0, 255).astype(
+                    np.uint8
+                )
+
+            def mask_transform(mask):
+                return dataloaders["testing"].dataset.transform_mask(mask).numpy()
+
+            # Save heatmaps for selected images
+            for category, indices in [
+                ("best_normal", best_normal),
+                ("worst_normal", worst_normal),
+                ("best_anomalous", best_anomalous),
+                ("worst_anomalous", worst_anomalous),
+            ]:
+                cat_save_path = os.path.join(
+                    run_save_path, "segmentation_images", dataset_name, category
+                )
+                os.makedirs(cat_save_path, exist_ok=True)
+
+                cat_image_paths = [image_paths[i] for i in indices]
+                cat_segmentations = [segmentations[i] for i in indices]
+                cat_scores = [scores[i] for i in indices]
+                cat_mask_paths = [mask_paths[i] for i in indices]
+
+                patchcore.utils.plot_segmentation_images(
+                    cat_save_path,
+                    cat_image_paths,
+                    cat_segmentations,
+                    cat_scores,
+                    cat_mask_paths,
+                    image_transform=image_transform,
+                    mask_transform=mask_transform,
+                )
+
             # (Optional) Plot example images.
             if save_segmentation_images:
                 image_paths = [
@@ -288,8 +361,9 @@ def patch_core(
         ):
             backbone_seed = None
             if ".seed-" in backbone_name:
-                backbone_name, backbone_seed = backbone_name.split(".seed-")[0], int(
-                    backbone_name.split("-")[-1]
+                backbone_name, backbone_seed = (
+                    backbone_name.split(".seed-")[0],
+                    int(backbone_name.split("-")[-1]),
                 )
             backbone = patchcore.backbones.load(backbone_name)
             backbone.name, backbone.seed = backbone_name, backbone_seed
